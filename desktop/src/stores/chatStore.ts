@@ -10,6 +10,7 @@ import { randomSpinnerVerb } from '../config/spinnerVerbs'
 import { notifyDesktop } from '../lib/desktopNotifications'
 import { deriveSessionTitle, isPlaceholderSessionTitle } from '../lib/sessionTitle'
 import { AGENT_LIFECYCLE_TYPES } from '../types/team'
+import type { ComposerAttachment } from '../lib/composerAttachments'
 import type { MessageEntry } from '../types/session'
 import type { PermissionMode } from '../types/settings'
 import type { RuntimeSelection } from '../types/runtime'
@@ -31,6 +32,11 @@ import type {
 } from '../types/chat'
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+
+export type ComposerDraftState = {
+  input: string
+  attachments: ComposerAttachment[]
+}
 
 export type PerSessionState = {
   messages: UIMessage[]
@@ -65,6 +71,7 @@ export type PerSessionState = {
     attachments?: UIAttachment[]
     nonce: number
   } | null
+  composerDraft?: ComposerDraftState | null
 }
 
 const DEFAULT_SESSION_STATE: PerSessionState = {
@@ -87,6 +94,7 @@ const DEFAULT_SESSION_STATE: PerSessionState = {
   activeGoal: null,
   elapsedTimer: null,
   composerPrefill: null,
+  composerDraft: null,
 }
 
 function createDefaultSessionState(): PerSessionState {
@@ -128,6 +136,8 @@ type ChatStore = {
     sessionId: string,
     prefill: { text: string; attachments?: UIAttachment[] },
   ) => void
+  setComposerDraft: (sessionId: string, draft: ComposerDraftState) => void
+  clearComposerDraft: (sessionId: string) => void
   clearMessages: (sessionId: string) => void
   handleServerMessage: (sessionId: string, msg: ServerMessage) => void
 }
@@ -403,6 +413,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           connectionState: 'connecting',
           messages: existing?.messages ?? [],
           activeGoal: existing?.activeGoal ?? null,
+          composerDraft: existing?.composerDraft ?? null,
         },
       },
     }))
@@ -734,6 +745,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           attachments: prefill.attachments,
           nonce: Date.now(),
         },
+      })),
+    }))
+  },
+
+  setComposerDraft: (sessionId, draft) => {
+    set((state) => {
+      const session = state.sessions[sessionId] ?? createDefaultSessionState()
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            composerDraft: draft,
+          },
+        },
+      }
+    })
+  },
+
+  clearComposerDraft: (sessionId) => {
+    set((state) => ({
+      sessions: updateSessionIn(state.sessions, sessionId, () => ({
+        composerDraft: null,
       })),
     }))
   },
