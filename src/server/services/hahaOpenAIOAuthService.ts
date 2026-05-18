@@ -84,9 +84,17 @@ export class HahaOpenAIOAuthService {
   async saveTokens(tokens: StoredOpenAIOAuthTokens): Promise<void> {
     const filePath = this.getOAuthFilePath()
     await fs.mkdir(path.dirname(filePath), { recursive: true })
-    const tmp = `${filePath}.tmp.${process.pid}`
-    await fs.writeFile(tmp, JSON.stringify(tokens, null, 2), { mode: 0o600 })
-    await fs.rename(tmp, filePath)
+    const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`
+    let renamed = false
+    try {
+      await fs.writeFile(tmp, JSON.stringify(tokens, null, 2), { mode: 0o600 })
+      await fs.rename(tmp, filePath)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        await fs.rm(tmp, { force: true }).catch(() => {})
+      }
+    }
   }
 
   async deleteTokens(): Promise<void> {

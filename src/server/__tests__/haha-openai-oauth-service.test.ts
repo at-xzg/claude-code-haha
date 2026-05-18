@@ -2,7 +2,7 @@
  * Unit tests for HahaOpenAIOAuthService — haha 自管 OpenAI OAuth 的核心 service 层。
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
@@ -73,6 +73,36 @@ describe('HahaOpenAIOAuthService — file storage', () => {
       accountId: null,
     })
     await service.deleteTokens()
+    expect(await service.loadTokens()).toBeNull()
+  })
+
+  test('saveTokens cleans up tmp file when rename fails', async () => {
+    const renameSpy = spyOn(fs, 'rename').mockImplementation(async () => {
+      const error = new Error('rename failed') as NodeJS.ErrnoException
+      error.code = 'EXDEV'
+      throw error
+    })
+
+    try {
+      await expect(
+        service.saveTokens({
+          accessToken: 'sensitive-access',
+          refreshToken: 'sensitive-refresh',
+          expiresAt: Date.now() + 3600_000,
+          idToken: 'sensitive-id-token',
+          email: 'test@example.com',
+          accountId: 'acct_123',
+        }),
+      ).rejects.toThrow('rename failed')
+    } finally {
+      renameSpy.mockRestore()
+    }
+
+    const oauthPath = getHahaOpenAIOAuthFilePath()
+    const files = await fs.readdir(path.dirname(oauthPath))
+    expect(
+      files.filter((name) => name.startsWith('openai-oauth.json.tmp.')),
+    ).toEqual([])
     expect(await service.loadTokens()).toBeNull()
   })
 })
